@@ -14,7 +14,7 @@ public typealias EventSourceryOnOpen = (() -> Void)
 public typealias EventSourceryOnMessage = (EventSourceryEvent -> Void)
 public typealias EventSourceryOnError = (NSError? -> Void)
 
-public class EventSourcery: NSObject {
+final public class EventSourcery: NSObject {
 
     // MARK: - Public Properties
 
@@ -42,7 +42,7 @@ public class EventSourcery: NSObject {
 
     // MARK: - Event Listeners
 
-
+    // TODO
 
     // MARK: - Private Properties
 

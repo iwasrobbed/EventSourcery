@@ -8,7 +8,7 @@
 
 import Foundation
 
-class EventSourceryRequest: NSObject {
+final class EventSourceryRequest: NSObject {
 
     // MARK: - Properties
 
@@ -47,6 +47,10 @@ class EventSourceryRequest: NSObject {
     private let onOpenCallback: EventSourceryOnOpen?
     private let onMessageCallback: EventSourceryOnMessage?
     private let onErrorCallback: EventSourceryOnError?
+
+    // TODO: Hold a reference to any split data to find it a home within the next packet
+    // Could do this by holding the data buffer strongly here and then passing it into the parser to mutate
+    // which would leave any leftover event strings still in the buffer for the next response
 
     // MARK: - Private Computed Properties
 
@@ -88,7 +92,16 @@ extension EventSourceryRequest: NSURLSessionDelegate {
         guard !response.connectionClosed else { return }
         guard state == .Open else { return }
 
-        // Parse data buffer and event stream
+        // Check for events
+        guard let events = response.events?.filter({ !$0.isRetryEvent }) else { return }
+        dispatch_async(dispatch_get_main_queue()) {
+            events.forEach { self.onMessageCallback?($0) }
+        }
+
+        // Check if we should be forced to retry at a different interval
+        if let retryTime = response.retryTime {
+            retry(retryTime)
+        }
     }
 
     func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveResponse response: NSURLResponse, completionHandler: (NSURLSessionResponseDisposition) -> Void) {
@@ -110,9 +123,8 @@ extension EventSourceryRequest: NSURLSessionDelegate {
         var response = EventSourceryResponse(task: task)
         guard !response.connectionClosed else { return }
 
-        if error == nil {
-            retry()
-        } else if let error = error where error.code != NSURLErrorCancelled {
+        if error?.code != NSURLErrorCancelled {
+            // Note: this also checks if error is explicitly nil
             retry()
         }
 
@@ -127,7 +139,11 @@ extension EventSourceryRequest: NSURLSessionDelegate {
 
 private extension EventSourceryRequest {
 
-    func retry() {
+    func retry(timeInterval: NSTimeInterval? = nil) {
+        if let timeInterval = timeInterval {
+            retryInterval = timeInterval
+        }
+
         let nanoseconds = retryInterval * Double(NSEC_PER_SEC)
         let delay = dispatch_time(DISPATCH_TIME_NOW, Int64(nanoseconds))
         dispatch_after(delay, dispatch_get_main_queue()) {

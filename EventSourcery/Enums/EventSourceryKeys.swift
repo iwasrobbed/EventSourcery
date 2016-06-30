@@ -19,6 +19,7 @@ struct EventSourceryKeys {
 
     struct Format {
         static let delimiter = ":"
+        static let separatorLF = "\n" // Line feed
         static let separatorLFLF = "\n\n" // Line feed
         static let separatorCRCR = "\r\r" // Carriage return
         static let separatorCRLFCRLF = "\r\n\r\n"

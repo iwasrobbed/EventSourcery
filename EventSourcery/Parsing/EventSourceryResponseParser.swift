@@ -19,7 +19,7 @@ struct EventSourceryResponseParser {
     // MARK: - Parsing
 
     func parse() throws -> [EventSourceryEvent]? {
-        return try? parseEvents()
+        return try parseEvents()
     }
 
     // MARK: - Private properties
@@ -29,12 +29,37 @@ struct EventSourceryResponseParser {
 
 private extension EventSourceryResponseParser {
 
-    func parseEventStrings() throws -> [String] {
+    func parseEvents() throws -> [EventSourceryEvent]? {
+        guard let parsedEvents = try? parseEventStrings(), eventStrings = parsedEvents else {
+            throw EventSourceryErrors.ResponseParsingError(message: "Could not parse events to turn into messages")
+        }
+
+        var events = [EventSourceryEvent]()
+        for eventString in eventStrings {
+            // Check if it's a comment, which can be ignored
+            // e.g. ": some comment here\n"
+            if eventString.hasPrefix(EventSourceryKeys.Format.delimiter) {
+                continue
+            }
+
+            let event = try EventSourceryEvent(eventString: eventString)
+            events.append(event)
+        }
+
+        // Record the last event
+        if let lastEvent = events.last {
+            EventSourceryCache.lastEventID = lastEvent.id
+        }
+
+        return events.count > 0 ? events : nil
+    }
+
+    func parseEventStrings() throws -> [String]? {
         var eventStrings = [String]()
 
-        guard let data = data else { return eventStrings }
+        guard let data = data else { return nil }
         guard let delimiter = EventSourceryKeys.Format.separatorLFLF.dataUsingEncoding(NSUTF8StringEncoding) else {
-            throw EventSourceryErrors.ParsingError(message: "Could not instantiate delimiter into data")
+            throw EventSourceryErrors.ResponseParsingError(message: "Could not instantiate delimiter into data")
         }
 
         var searchRange = NSMakeRange(0, data.length)
@@ -45,7 +70,7 @@ private extension EventSourceryResponseParser {
                 let range = NSMakeRange(searchRange.location, foundRange.location - searchRange.location)
                 let chunk = data.subdataWithRange(range)
                 guard let event = NSString(data: chunk, encoding: NSUTF8StringEncoding) as? String else {
-                    throw EventSourceryErrors.ParsingError(message: "Could not chunk found data into a UTF-8 string")
+                    throw EventSourceryErrors.ResponseParsingError(message: "Could not chunk found data into a UTF-8 string")
                 }
 
                 eventStrings.append(event)
@@ -58,25 +83,6 @@ private extension EventSourceryResponseParser {
         }
 
         return eventStrings
-    }
-
-    func parseEvents() throws -> [EventSourceryEvent] {
-        guard let eventStrings = try? parseEventStrings() else {
-            throw EventSourceryErrors.ParsingError(message: "Could not parse events to turn into messages")
-        }
-
-        var events = [EventSourceryEvent]()
-        for eventString in eventStrings {
-            // Check if it's a comment, which can be ignored
-            // e.g. ": some comment here\n"
-            if eventString.hasPrefix(EventSourceryKeys.Format.delimiter) {
-                continue
-            }
-
-            events.append(EventSourceryEvent(eventString: eventString))
-        }
-
-        return events
     }
 
 }

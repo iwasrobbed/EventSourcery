@@ -27,6 +27,20 @@ struct EventSourceryResponse {
         self.data = data
     }
 
+    // MARK: - Events
+
+    lazy var events: [EventSourceryEvent]? = {
+        guard let events = try? EventSourceryResponseParser.init(data: self.data).parse() else { return nil }
+        return events
+    }()
+
+    // MARK: - Retrying
+
+    lazy var retryTime: NSTimeInterval? = {
+        guard let events = self.events, retryEvent = events.filter({ $0.isRetryEvent }).first else { return nil }
+        return retryEvent.retryTime
+    }()
+
     // MARK: - Private Properties
 
     private let urlResponse: NSHTTPURLResponse?
